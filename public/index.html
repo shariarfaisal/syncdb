@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Server side event</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: sans-serif;
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      .container {
+        width: 100%;
+        margin: 0 auto;
+        min-height: 100vh;
+        position: relative;
+        overflow-y: auto;
+      }
+
+      .title {
+        text-align: center;
+        background-color: #333;
+        color: #fff;
+        padding: 10px;
+        margin: 0;
+        position: sticky;
+        top: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+        height: 50px;
+      }
+
+      #logs {
+        padding: 10px;
+        max-width: 100%;
+      }
+      .item {
+        border: 1px solid lightgray;
+        padding: 10px;
+        margin-bottom: 10px;
+      }
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .driver {
+        font-weight: bold;
+        font-size: 1.2rem;
+      }
+      .table {
+        font-weight: bold;
+        font-size: 1.2rem;
+      }
+      .operation {
+        font-weight: bold;
+        font-size: 1.2rem;
+      }
+      .data {
+        font-family: monospace;
+        font-size: 0.8rem;
+        margin-top: 10px;
+        width: 100%;
+        border: none;
+        outline: none;
+        background: #f7f7f7;
+        border-radius: 10px;
+        padding: 10px 20px;
+        max-width: 100%;
+        box-sizing: border-box;
+        min-height: 130px;
+      }
+
+      .data:focus {
+        outline: none;
+      }
+
+      .schema {
+        padding: 10px;
+        max-width: 100%;
+      }
+
+      .schema .input {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 10px;
+      }
+
+      .schema #data,
+      .schema #schema {
+        width: 50%;
+        border: 1px solid lightgray;
+        outline: none;
+        background: #f7f7f7;
+        padding: 20px;
+        border-radius: 10px;
+      }
+
+      .schema #schema {
+        margin-left: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1 class="title">Change Log Data Streaming</h1>
+
+      <div class="schema">
+        <div class="input">
+          <textarea
+            placeholder="Paste Data Here"
+            id="data"
+            rows="10"
+          ></textarea>
+          <textarea
+            placeholder="Schema"
+            disabled
+            id="schema"
+            rows="10"
+          ></textarea>
+        </div>
+        <div>
+          <button onclick="schemaGenerate()">Generate Schema</button>
+          <button onclick="copySchema()">Copy Schema</button>
+        </div>
+      </div>
+      <div id="logs"></div>
+    </div>
+
+    <script>
+      let logs = document.getElementById("logs");
+      const eventSource = new EventSource("http://localhost:8085/stream");
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          const log = document.createElement("div");
+          log.classList.add("item");
+          log.innerHTML = `
+            <div class="header">
+              <div class="driver">${data.driver}</div>
+              <div class="table">${data.table_name}</div>
+              <div class="operation">${data.operation}</div>
+            </div>
+            <textarea disabled class="data" rows="5">${JSON.stringify(
+              data.data,
+              null,
+              2
+            )}</textarea>
+          `;
+          logs.appendChild(log);
+        } catch (err) {
+          console.log(err);
+        }
+      };
+
+      function schemaGenerate() {
+        let schema = {};
+
+        function a(k, val) {
+          if (typeof val === "object" && !Array.isArray(val)) {
+            for (key in val) {
+              a(k + key + ".", val[key]);
+            }
+          } else if (Array.isArray(val)) {
+            val.forEach((i) => {
+              a(k, i);
+            });
+          } else {
+            if (k && k.endsWith(".")) {
+              k = k.substr(0, k.length - 1);
+            }
+            schema[k] = {
+              Table: "",
+              Field: k.split(".").pop(),
+              Type: typeof val,
+            };
+          }
+        }
+
+        const data = JSON.parse(document.getElementById("data").value);
+        a("", data);
+        document.getElementById("schema").value = JSON.stringify(
+          schema,
+          null,
+          2
+        );
+      }
+
+      function copySchema() {
+        const schema = document.getElementById("schema");
+        const input = document.createElement("input");
+        const value = JSON.parse(schema.value);
+
+        // add comma at the end of each line
+        for (let key in value) {
+          let str = JSON.stringify(value[key]);
+          console.log(str);
+          str = str.replace('"}', '",}');
+          value[key] = JSON.parse(str);
+        }
+        // console.log(value);
+
+        input.value = schema.value;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand("copy");
+        document.body.removeChild(input);
+      }
+    </script>
+  </body>
+</html>

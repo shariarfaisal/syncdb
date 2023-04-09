@@ -3,6 +3,7 @@ package stream
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 
 	"github.com/gin-gonic/gin"
@@ -92,6 +93,27 @@ func (stream *Event) ServeHTTP() gin.HandlerFunc {
 		c.Set("clientChan", clientChan)
 
 		c.Next()
+	}
+}
+
+func (stream *Event) Streaming() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		v, ok := c.Get("clientChan")
+		if !ok {
+			return
+		}
+		clientChan, ok := v.(ClientChan)
+		if !ok {
+			return
+		}
+		c.Stream(func(w io.Writer) bool {
+			// Stream message to client from message channel
+			if msg, ok := <-clientChan; ok {
+				c.SSEvent("message", msg)
+				return true
+			}
+			return false
+		})
 	}
 }
 
